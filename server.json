@@ -5,7 +5,7 @@
   "description": "Build multi-tenant apps over MCP. Schemas, CRUD, deploys — access control enforced server-side.",
   "websiteUrl": "https://docs.supero.dev/developers/mcp/overview",
   "repository": {
-    "url": "https://github.com/supero-platform/supero-apps",
+    "url": "https://github.com/supero-platform/supero-mcp",
     "source": "github"
   },
   "version": "2.0.0",
