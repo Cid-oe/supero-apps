@@ -1,7 +1,8 @@
 # Amplify
 
 > Launch campaigns everywhere, from one place — connect every social channel, compose with AI, schedule, publish and track performance.
-> **Live:** [amplify.supero.live](https://amplify.supero.live) · **Industry:** marketing
+> Live: amplify.supero.live · Industry: marketing
+How it works: Did the post go out? Amplify, a social media management app, records it
 
 Part of [Supero Apps](../../../README.md) — clone it onto a domain you own and run it. The
 app source here is MIT.
