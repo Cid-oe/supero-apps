@@ -1,7 +1,8 @@
 # Atelier
 
 > The wholesale marketplace where independent brands meet the boutiques that love them.
-> **Live:** [atelier.supero.live](https://atelier.supero.live) · **Industry:** marketplace
+> Live: atelier.supero.live · Industry: marketplace
+How it works: Wholesale marketplace app Atelier asks for net terms before a card
 
 Part of [Supero Apps](../../../README.md) — clone it onto a domain you own and run it. The
 app source here is MIT.
