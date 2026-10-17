@@ -163,10 +163,9 @@ POLICIES = [
 WORKFLOW_DEFINITIONS = [
     {
         "workflow_id": "order_confirmation", "display_name": "Order Confirmation",
-        "description": "Emails and texts the customer when an order is placed.",
+        "description": "Emails the customer when an order is placed.",
         "version": "1.0.0", "enabled": True, "status": "Active", "on_error": "continue",
         "input_schema": {"customer_email": {"type": "string", "required": False},
-                         "customer_phone": {"type": "string", "required": False},
                          "customer_name": {"type": "string", "required": False},
                          "order_number": {"type": "string", "required": False},
                          "restaurant_name": {"type": "string", "required": False},
@@ -176,9 +175,6 @@ WORKFLOW_DEFINITIONS = [
              "input_map": {"to_email": "{{input.customer_email}}",
                            "subject": "Your Tavola order {{input.order_number}} is confirmed",
                            "body_html": "<p>Hi {{input.customer_name}},</p><p>Thanks for ordering from {{input.restaurant_name}}! Your order {{input.order_number}} (${{input.total}}) is confirmed and the kitchen is on it. We'll let you know the moment it's ready.</p><p>— Tavola</p>"}},
-            {"id": "sms", "type": "service_call", "service": "sms", "operation": "send_sms", "on_error": "continue",
-             "input_map": {"to": "{{input.customer_phone}}",
-                           "body": "Tavola: order {{input.order_number}} from {{input.restaurant_name}} confirmed (${{input.total}}). We'll text you when it's ready!"}},
         ],
     },
     {
@@ -227,7 +223,8 @@ EVENT_BINDINGS = [
     # JWT of whoever performed the action), NOT from the record field the
     # visitor typed. The form field is free text, so mapping it here let any
     # signed-in visitor aim this app's real transactional mail at a stranger —
-    # using the demo password published in this README. The event payload
+    # using the demo password published in this README. Order confirmation is
+    # email-only for that reason (no verified phone number exists). The event payload
     # carries `user` from the verified token (server.py: payload["user"]).
     {"event": "@create:tavola:order", "workflow_id": "order_confirmation",
      "input_map": {"customer_email": "user.email",
