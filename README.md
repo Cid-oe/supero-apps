@@ -354,7 +354,7 @@ Thank you to the people who have improved these apps:
 
 - [@bhavesh1309](https://github.com/bhavesh1309) added the first app screenshots, for Lumen Health ([#28](https://github.com/supero-platform/supero-apps/pull/28)) and FieldOps ([#32](https://github.com/supero-platform/supero-apps/pull/32)).
 - [@kkinsen0314-alt](https://github.com/kkinsen0314-alt) fixed TrialCore's enrolment email, which had no recipient, and added a test for it ([#29](https://github.com/supero-platform/supero-apps/pull/29)).
-- [@Cid-oe](https://github.com/Cid-oe) made Tavola's order confirmation email-only, closing the last open SMS path in that app ([#33](https://github.com/supero-platform/supero-apps/pull/33)).
+- [@Cid-oe](https://github.com/Cid-oe) made Tavola's order confirmation email-only by removing its SMS step, which closed #20 ([#33](https://github.com/supero-platform/supero-apps/pull/33)).
 
 Want your name here? The [open issues](https://github.com/supero-platform/supero-apps/issues) say what needs doing, and several are marked `good first issue`.
 
