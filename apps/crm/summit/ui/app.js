@@ -4,8 +4,55 @@
 (function () {
   var h = React.createElement;
 
-  var STAGES = ['Prospecting', 'Qualification', 'Proposal', 'Negotiation', 'Closed Won', 'Closed Lost'];
-  var OPEN_STAGES = ['Prospecting', 'Qualification', 'Proposal', 'Negotiation'];
+  var FALLBACK_STAGES = ['Prospecting', 'Qualification', 'Proposal', 'Negotiation', 'Closed Won', 'Closed Lost'];
+
+  function resolveDealStages() {
+    try {
+      var reg = (typeof SuperoSchemaRegistry !== 'undefined' && SuperoSchemaRegistry && SuperoSchemaRegistry.get)
+        ? (SuperoSchemaRegistry.get('deal') || SuperoSchemaRegistry.get('summit:deal'))
+        : null;
+      var attrs = (reg && (reg.attributes || [])) || [];
+      for (var i = 0; i < attrs.length; i++) {
+        var a = attrs[i];
+        if (a && a.name === 'deal_stage' && Array.isArray(a.values) && a.values.length) {
+          return a.values.slice();
+        }
+      }
+    } catch (e) {}
+    return FALLBACK_STAGES.slice();
+  }
+
+  function deriveOpenStages(stages) {
+    return (stages || []).filter(function (st) {
+      return typeof st === 'string' && st.indexOf('Closed') !== 0;
+    });
+  }
+
+  var STAGES = resolveDealStages();
+  var OPEN_STAGES = deriveOpenStages(STAGES);
+
+  function syncStagesFromRegistry() {
+    var fresh = resolveDealStages();
+    if (fresh && fresh.length) {
+      STAGES.length = 0;
+      Array.prototype.push.apply(STAGES, fresh);
+      OPEN_STAGES.length = 0;
+      Array.prototype.push.apply(OPEN_STAGES, deriveOpenStages(STAGES));
+    }
+  }
+
+  try {
+    if (typeof SuperoSchemaRegistry !== 'undefined' && SuperoSchemaRegistry && SuperoSchemaRegistry.ready) {
+      SuperoSchemaRegistry.ready().then(function () {
+        syncStagesFromRegistry();
+      });
+    }
+  } catch (e) {}
+
+  if (typeof window !== 'undefined') {
+    window._resolveDealStages = resolveDealStages;
+    window._deriveOpenStages = deriveOpenStages;
+  }
   var LEAD_STATES = ['new', 'working', 'qualified', 'unqualified', 'converted'];
   var LEAD_SOURCES = ['Web', 'Referral', 'Event', 'Outbound', 'Partner', 'Ad'];
   var ACT_TYPES = ['Call', 'Email', 'Meeting', 'Note', 'Task'];
@@ -607,6 +654,13 @@
     var [dealOpen, setDealOpen] = React.useState(null);
 
     function navigate(hash) { if (window.location.hash !== hash) { window.location.hash = hash; } else { setRoute(hash); } window.scrollTo(0, 0); }
+    React.useEffect(function () {
+      if (typeof SuperoSchemaRegistry !== 'undefined' && SuperoSchemaRegistry && SuperoSchemaRegistry.ready) {
+        SuperoSchemaRegistry.ready().then(function () {
+          syncStagesFromRegistry();
+        });
+      }
+    }, []);
     React.useEffect(function () { function oh() { setRoute(window.location.hash || '#/'); } window.addEventListener('hashchange', oh); return function () { window.removeEventListener('hashchange', oh); }; }, []);
     React.useEffect(function () {
       if (client.isAuthenticated()) { setAuthed(true); return; }
