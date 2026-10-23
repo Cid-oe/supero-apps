@@ -28,6 +28,30 @@
     return t || '';
   }
 
+  // SAGA-GUARD-V1 — one place where a workflow result is judged, so no call site
+  // can forget. Rejects when the execute envelope says success:false, and also
+  // when the saga itself reports a non-completed status or a failed step — a
+  // `compensated` run has UNDONE its own work, so showing "done" would be the
+  // opposite of the truth. Resolves unchanged on real success.
+  function runSaga(workflowId, input) {
+    if (!(services && services.workflow && services.workflow.run)) {
+      return Promise.reject(new Error('workflow service unavailable'));
+    }
+    return Promise.resolve(services.workflow.run(workflowId, input)).then(function (res) {
+      var r = res || {};
+      var out = (r.output && typeof r.output === 'object') ? r.output : {};
+      if (r.success === false || r.error || out.error) {
+        throw new Error(String(r.error || out.error || (workflowId + ' failed')));
+      }
+      var st = out.status || '';
+      if (st && st !== 'completed') throw new Error(out.error_message || (workflowId + ' ' + st));
+      if (Number(out.steps_failed) > 0) {
+        throw new Error(out.error_message || (out.steps_failed + ' step(s) failed in ' + workflowId));
+      }
+      return res;
+    });
+  }
+
   function injectChrome() {
     if (document.getElementById('cc-chrome')) return;
     var l = document.createElement('link'); l.rel = 'stylesheet';
@@ -368,7 +392,41 @@
       if (!ticket) return; setSuggesting(true);
       suggestReply(ticket, msgs, c.articles || []).then(function (t) { setReply(t); setSuggesting(false); showToast('AI drafted a reply — edit and send', 'info'); });
     }
-    function setState(st) { client.updateObject('ticket', ticket.uuid, st === 'resolved' ? { ticket_state: 'resolved', resolved_at: new Date().toISOString() } : { ticket_state: st }, ticket).then(function () { showToast('Ticket ' + st, 'success'); load(); }).catch(function () {}); }
+    function escalateTicket() {
+      if (!ticket) return;
+      var input = {
+        subject: ticket.subject || 'Support ticket',
+        customer_email: ticket.customer_email || (ticket.owner_username || 'customer'),
+        priority: ticket.priority || 'high'
+      };
+      if (!(services && services.workflow && services.workflow.run)) {
+        showToast('Workflow service unavailable — escalation not sent', 'error');
+        return;
+      }
+      runSaga('ticket_escalation', input)
+        .then(function () {
+          var patch = (ticket.priority === 'urgent' || ticket.priority === 'high') ? {} : { priority: 'high' };
+          if (Object.keys(patch).length) {
+            return client.updateObject('ticket', ticket.uuid, patch, ticket);
+          }
+        })
+        .then(function () {
+          showToast('Ticket escalated to #support Slack channel', 'success');
+          load();
+        })
+        .catch(function (err) {
+          showToast('Escalation failed — ' + ((err && err.message) || 'workflow error'), 'error');
+        });
+    }
+    function setState(st) {
+      var patch = st === 'resolved' ? { ticket_state: 'resolved', resolved_at: new Date().toISOString() } : { ticket_state: st };
+      client.updateObject('ticket', ticket.uuid, patch, ticket).then(function () {
+        showToast('Ticket ' + st, 'success');
+        load();
+      }).catch(function (e) {
+        showToast('Failed to update ticket: ' + ((e && e.message) || 'error'), 'error');
+      });
+    }
     if (!ticket) return h('div', { className: 'cc-wrap cc-sec' }, h('div', { className: 'cc-empty' }, 'Loading…'));
     return h('div', { className: 'cc-wrap cc-sec' },
       h('button', { className: 'cc-btn cc-btn-ghost cc-btn-sm', onClick: function () { c.navigate(agent ? '#/agent/queue' : '#/tickets'); } }, '← Back'),
@@ -395,6 +453,7 @@
             return h('div', { key: i, style: { display: 'flex', justifyContent: 'space-between', padding: '7px 0', borderTop: i ? '1px solid var(--line)' : 0, fontSize: '13.5px' } }, h('span', { className: 'cc-mut' }, r[0]), h('b', { style: { textTransform: 'capitalize' } }, String(r[1])));
           }),
           agent ? h('div', { style: { marginTop: '14px', display: 'flex', flexWrap: 'wrap', gap: '8px' } },
+            ticket.ticket_state === 'open' ? h('button', { className: 'cc-btn cc-btn-ghost cc-btn-sm', onClick: escalateTicket }, '🚨 Escalate') : null,
             ticket.ticket_state !== 'resolved' && ticket.ticket_state !== 'closed' ? h('button', { className: 'cc-btn cc-btn-ink cc-btn-sm', onClick: function () { setState('resolved'); } }, 'Resolve') : null,
             ticket.ticket_state !== 'closed' ? h('button', { className: 'cc-btn cc-btn-ghost cc-btn-sm', onClick: function () { setState('closed'); } }, 'Close') : h('button', { className: 'cc-btn cc-btn-ghost cc-btn-sm', onClick: function () { setState('open'); } }, 'Reopen'))
             : (ticket.ticket_state === 'resolved' ? h('div', { style: { marginTop: '14px' } }, h('div', { className: 'cc-mut', style: { marginBottom: '6px' } }, 'Rate this resolution:'),
@@ -428,7 +487,36 @@
   function AgentQueue(props) {
     var c = props.ctx; var [tickets, setTickets] = React.useState(null);
     var [fState, setFState] = React.useState('open'); var [fPrio, setFPrio] = React.useState('all');
-    React.useEffect(function () { client.getObjects('ticket').then(function (r) { setTickets(arr(r).sort(function (a, b) { return (b.created_at || '').localeCompare(a.created_at || ''); })); }).catch(function () { setTickets([]); }); }, []);
+    function reload() {
+      client.getObjects('ticket').then(function (r) { setTickets(arr(r).sort(function (a, b) { return (b.created_at || '').localeCompare(a.created_at || ''); })); }).catch(function () { setTickets([]); });
+    }
+    React.useEffect(reload, []);
+    function escalateTicket(t, e) {
+      if (e && e.stopPropagation) e.stopPropagation();
+      var input = {
+        subject: t.subject || 'Support ticket',
+        customer_email: t.customer_email || (t.owner_username || 'customer'),
+        priority: t.priority || 'high'
+      };
+      if (!(services && services.workflow && services.workflow.run)) {
+        showToast('Workflow service unavailable — escalation not sent', 'error');
+        return;
+      }
+      runSaga('ticket_escalation', input)
+        .then(function () {
+          var patch = (t.priority === 'urgent' || t.priority === 'high') ? {} : { priority: 'high' };
+          if (Object.keys(patch).length) {
+            return client.updateObject('ticket', t.uuid, patch, t);
+          }
+        })
+        .then(function () {
+          showToast('Ticket escalated to #support Slack channel', 'success');
+          reload();
+        })
+        .catch(function (err) {
+          showToast('Escalation failed — ' + ((err && err.message) || 'workflow error'), 'error');
+        });
+    }
     var list = (tickets || []).filter(function (t) { return (fState === 'all' || t.ticket_state === fState) && (fPrio === 'all' || t.priority === fPrio); });
     return h('div', null,
       !props.embedded ? h('h2', { className: 'cc-h2', style: { marginBottom: '12px' } }, 'Ticket queue') : h('div', { style: { fontWeight: 700, marginBottom: '10px' } }, 'Queue'),
@@ -440,7 +528,9 @@
           : list.length ? list.map(function (t) {
             return h('div', { key: t.uuid, className: 'cc-row', style: { cursor: 'pointer' }, onClick: function () { c.navigate('#/agent/ticket/' + t.uuid); } },
               h('div', { className: 'cc-grow' }, h('div', { style: { fontWeight: 700 } }, t.subject, t.ai_handled ? h('span', { className: 'cc-chip', style: { marginLeft: '8px' } }, '✦ AI') : null), h('div', { className: 'cc-mut' }, (t.customer_name || '') + ' · ' + (t.category || '') + ' · ' + (t.channel || 'chat') + ' · ' + fmtDate(t.created_at))),
-              h(Badge, { s: t.priority || 'normal' }), h(Badge, { s: t.ticket_state }));
+              h(Badge, { s: t.priority || 'normal' }),
+              h(Badge, { s: t.ticket_state }),
+              t.ticket_state === 'open' ? h('button', { className: 'cc-btn cc-btn-ghost cc-btn-sm', style: { marginLeft: '6px' }, onClick: function (e) { escalateTicket(t, e); } }, '🚨 Escalate') : null);
           }) : h('div', { className: 'cc-empty' }, 'No tickets match.')));
   }
 

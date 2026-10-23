@@ -146,7 +146,7 @@ WORKFLOW_DEFINITIONS = [
     {
         "workflow_id": "ticket_escalation",
         "display_name": "Escalate to Slack",
-        "description": "Posts a high-priority ticket into the support Slack channel and reassures the customer by email.",
+        "description": "Posts a high-priority ticket into the support Slack channel.",
         "version": "1.0.0", "enabled": True, "status": "Active", "on_error": "continue",
         "input_schema": {
             "subject": {"type": "string", "required": False},
@@ -154,13 +154,11 @@ WORKFLOW_DEFINITIONS = [
             "priority": {"type": "string", "required": False},
         },
         "steps": [
+            # Escalation alert routes strictly to the team's Slack channel (a fixed recipient).
+            # Customer email is omitted until platform-side binding resolution lands.
             {"id": "slack", "type": "service_call", "service": "slack", "operation": "send_message", "on_error": "continue",
              "input_map": {"channel": "#support",
                            "text": "🚨 Escalated ticket — *{{input.subject}}* (priority {{input.priority}}) from {{input.customer_email}}"}},
-            {"id": "email", "type": "service_call", "service": "email", "operation": "send_email", "on_error": "continue",
-             "input_map": {"to_email": "{{input.customer_email}}",
-                           "subject": "Your ticket has been escalated",
-                           "body_html": "<p>We've escalated your request to a specialist who will follow up shortly. Thanks for your patience!</p>"}},
         ],
     },
     {
@@ -189,7 +187,8 @@ EVENT_BINDINGS = [
         "input_map": {
             "ticket_uuid": "uuid",
             "subject": "subject",
-            "customer_email": "customer_email",
+            # NO-OPEN-RELAY-V1 — recipient taken from user.email (verified JWT)
+            "customer_email": "user.email",
             "customer_name": "customer_name",
         },
     },
