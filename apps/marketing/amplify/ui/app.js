@@ -617,6 +617,8 @@
         var lower = String(msg).toLowerCase();
         return lower.indexOf('not configured') >= 0 ||
                lower.indexOf('not connected') >= 0 ||
+               lower.indexOf('not imported') >= 0 ||
+               lower.indexOf('no config') >= 0 ||
                lower.indexOf('no credentials') >= 0 ||
                lower.indexOf('no api key') >= 0 ||
                lower.indexOf('missing credentials') >= 0 ||

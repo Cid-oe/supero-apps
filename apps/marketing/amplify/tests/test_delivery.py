@@ -118,6 +118,8 @@ function simulatePublish(scenario) {{
       const lower = String(msg).toLowerCase();
       return lower.indexOf('not configured') >= 0 ||
              lower.indexOf('not connected') >= 0 ||
+             lower.indexOf('not imported') >= 0 ||
+             lower.indexOf('no config') >= 0 ||
              lower.indexOf('no credentials') >= 0 ||
              lower.indexOf('no api key') >= 0 ||
              lower.indexOf('missing credentials') >= 0 ||
@@ -215,6 +217,29 @@ async function run() {{
   }});
   if (s3.delivery !== 'simulated' || s3.post_state !== 'published' || !s3.publish_error.includes('not configured')) {{
     throw new Error('Scenario 3 failed: ' + JSON.stringify(s3));
+  }}
+
+  // Scenario 3b: Demo seeded connected channels with unimported / no-config service -> simulated
+  const s3b = await simulatePublish({{
+    post: {{ uuid: 'p3b', platform: 'X', caption: 'Hello world' }},
+    channels: [{{ platform: 'X', channel_state: 'connected' }}],
+    services: {{
+      twitter: {{ tweet: () => Promise.reject(new Error('Service is not imported. Import it first')) }}
+    }}
+  }});
+  if (s3b.delivery !== 'simulated' || s3b.post_state !== 'published' || !s3b.publish_error.includes('not imported')) {{
+    throw new Error('Scenario 3b failed: ' + JSON.stringify(s3b));
+  }}
+
+  const s3c = await simulatePublish({{
+    post: {{ uuid: 'p3c', platform: 'X', caption: 'Hello world' }},
+    channels: [{{ platform: 'X', channel_state: 'connected' }}],
+    services: {{
+      twitter: {{ tweet: () => Promise.reject(new Error("Service 'twitter' has no config in project demo")) }}
+    }}
+  }});
+  if (s3c.delivery !== 'simulated' || s3c.post_state !== 'published' || !s3c.publish_error.includes('no config')) {{
+    throw new Error('Scenario 3c failed: ' + JSON.stringify(s3c));
   }}
 
   // Scenario 4: Connected platform (X) provider returns genuine refusal / rate limit -> failed
